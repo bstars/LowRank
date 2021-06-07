@@ -14,3 +14,4 @@ For the detailed derivation, please refer to
 
 and a to-be multisite adaption algorithm based on low-rank representation
 
+for the detail of the to-be multisite adaption algorithm, please refer to [My Note](http://www.lovinglavigne.com/multisite/multisite.html)
