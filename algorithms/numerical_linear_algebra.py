@@ -7,15 +7,26 @@
 
 import numpy as np
 import scipy.sparse as SP
+import os
+
+
 
 def singular_value_shrinkage(A, alpha):
     U, lamb, VT = np.linalg.svd(A)
     idx = np.where(lamb > alpha)[0]
-
+    print(idx)
     if len(idx) == 0:
         return np.zeros_like(A)
-    diags = np.maximum(lamb - alpha, 0)
-    return U @ SP.diags(diags) @ VT
+    elif len(idx) == 1:
+        return np.outer(U[:,0], (lamb[0] - alpha) * VT[0,:])
+    else:
+        diags = np.maximum(lamb[idx] - alpha,0)
+        return U[:,idx] @ SP.diags(diags).dot(VT[idx,:])
+
+def singular_value_shrinkage_serial(para):
+    return singular_value_shrinkage(para[0],para[1])
+
+
 
 
 def solve_identity_plus_low_rank(P:np.array, Q:np.array, F:np.array, method=None):
@@ -50,37 +61,8 @@ def solve_identity_plus_low_rank(P:np.array, Q:np.array, F:np.array, method=None
     return X
 
 if __name__ == '__main__':
-
-    # sanity check
-    m = 1000
-    n = 1400
-    k = 1000
-
-    P = np.random.randn(n, m)
-    Q = np.random.randn(n,m)
-
-    X = np.random.randn(n,k)
-
-    F = X + P @ (Q.T @ X)
-    import time
-
-    c1 = m * (n**2) + n**2 + n**3 + (n**2) * k
-    c2 = (m ** 2) * n + m ** 2 + m * n * k + (m ** 2) * k + m ** 3 + n * m * k + n * k
-
-    if c1 > c2:
-        print('solving block elimination')
-    else:
-        print('solving directly')
-
-    tic = time.time()
-    solve_identity_plus_low_rank(P, Q, F, method='block')
-    toc = time.time()
-    print(toc -tic)
-
-    tic = time.time()
-    np.linalg.solve(P @ Q.T + np.eye(n), F)
-    toc = time.time()
-    print(toc - tic)
+    A = np.random.randn(100,100)
+    singular_value_shrinkage(A, 0.1)
 
 
 

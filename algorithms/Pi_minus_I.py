@@ -8,12 +8,16 @@
 import sys
 sys.path.append('..')
 
+
+import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import numpy as np
 import scipy.sparse as SP
 import scipy.sparse.linalg as SPLA
+import time
 
 from algorithms.load_data import load_yale, load_multi_site_yale, load_abide_processed
-from algorithms.numerical_linear_algebra import singular_value_shrinkage, solve_identity_plus_low_rank
+from algorithms.numerical_linear_algebra import singular_value_shrinkage, singular_value_shrinkage_serial, solve_identity_plus_low_rank
 from algorithms.L1_plus_Lf_square import solve_one_norm_plus_frobenius_norm_square
 
 
@@ -78,16 +82,21 @@ def solve(Xd, Xs, Is, alpha, beta):
         print()
         print("iteration %d, c = %.6f" % (num_iter, c))
 
-        # optimize Z
-        PX = P @ Xd
-        Z_rhs = PX.T @ (PX - E + Y1 / c) + J + Y2 / c
-        Z = solve_identity_plus_low_rank(PX.T, PX.T, Z_rhs)
-        # Z_lhs = PX.T @ PX + SP.eye(m)
-        # Z = np.linalg.solve(Z_lhs, Z_rhs)
+        # optimize J
+        print("solving by singular value shrinkage")
+        J = singular_value_shrinkage(Z - Y2 / c, 1 / c)
+
+        # optimize Qi
+        for i in range(k):
+            print("solving by singular value shrinkage")
+            Pi = P[:, i * n: (i + 1) * n]
+            Y3i = Y3[:, i * n: (i + 1) * n]
+            Q[:, i * n: (i + 1) * n] = singular_value_shrinkage(Pi - (SP.eye(n) + Y3i / c), alpha / c)
 
         # optimize Ei
         F = np.eye(m) - Z
-        PX = P @ Xd
+        # PX = P @ Xd
+        PX = Xd.transpose().dot(P.T).transpose()
         shift = 0
         for i in range(k):
             Fi = F[:, shift:shift + num_sites[i]]
@@ -97,10 +106,15 @@ def solve(Xd, Xs, Is, alpha, beta):
             E[:, shift:shift + num_sites[i]] = Ei
             shift += num_sites[i]
 
+        # optimize Z
+        # PX = P @ Xd
+        Z_rhs = PX.T @ (PX - E + Y1 / c) + J + Y2 / c
+        Z = solve_identity_plus_low_rank(PX.T, PX.T, Z_rhs)
+
 
         # optimize Pi
         # F = (SP.eye(m) - Z).toarray()
-
+        F = np.eye(m) - Z
         PXFs = []
         shift = 0
         for i in range(k):
@@ -120,27 +134,17 @@ def solve(Xd, Xs, Is, alpha, beta):
             Fi = F[shift:shift + num_sites[i], :]
 
             XiFi = Xs[i] @ Fi
-            PiT_rhs = np.transpose(Y3i / c + Qi + SP.eye(n) - (G + Y1 / c) @ XiFi.T)
+            PiT_rhs = np.transpose(SP.eye(n) + Y3i / c + Qi - (G + Y1 / c) @ XiFi.T)
             PiT = solve_identity_plus_low_rank(XiFi, XiFi, PiT_rhs)
             Pi = PiT.T
             P[:, i * n:(i + 1) * n] = Pi
 
             shift += num_sites[i]
 
-        # optimize J
-        print("solving by singular value shrinkage")
-        J = singular_value_shrinkage(Z - Y2 / c, 1 / c)
 
-        # optimize Qi
-        for i in range(k):
-            print("solving by singular value shrinkage")
-            Pi = P[:, i * n: (i + 1) * n]
-            Y3i = Y3[:, i * n: (i + 1) * n]
-            Q[:, i * n: (i + 1) * n] = singular_value_shrinkage(Pi - SP.eye(n) - Y3i / c, alpha / c)
-
-        rp1s = P @ Xd @ (SP.eye(m) - Z) - E
+        rp1s = P @ (Xd.dot(SP.eye(m) - Z)) - E
         rp2s = J - Z
-        rp3s = Q - P + Is
+        rp3s = Is + Q - P
 
         max_r = max(
             np.max(np.abs(rp1s)), np.max(np.abs(rp2s)), np.max(np.abs(rp3s)),
@@ -158,13 +162,17 @@ def solve(Xd, Xs, Is, alpha, beta):
 
 
 if __name__ == '__main__':
-    # sites = [0, 2, 3, 4, 5, 7, 8]
-    # sites = [0,2]
-    # Xs = load_multi_site_yale(5, sites)
-    #
+    sites = [0, 2, 3, 4, 5, 7, 8]
+    sites = [0,2]
+    Xs = load_multi_site_yale(5, sites)
+
+    tic = time.time()
+    Xd_sp = low_rank_self(Xs, 0.1, 0.1)
+    toc = time.time()
+
+    print(toc - tic)
+    # Xs, labels, site_names = load_abide_processed(sites=['NYU', 'Leuven', 'UCLA', 'UM', 'USM'])
     # Xd_sp = low_rank_self(Xs, 0.1, 0.1)
-    Xs, labels, site_names = load_abide_processed()
-    low_rank_self(Xs, 0.1, 0.1)
 
 
 

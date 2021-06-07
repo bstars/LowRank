@@ -15,6 +15,7 @@ def load_yale(num_obj=None):
         Y = Y[:,:,:,:num_obj]
     return np.transpose(Y, axes=[1,0,2,3])
 
+
 def load_multi_site_yale(num_obj, sites):
     faces = load_yale(num_obj)
     Xs = [[] for i in sites]
@@ -29,7 +30,7 @@ def load_multi_site_yale(num_obj, sites):
     return ret
 
 
-def load_abide_processed():
+def load_abide_processed(sites):
     mdict = loadmat('../data/rois_aal.mat')
     fea = mdict['fea']
     label = mdict['label']
@@ -43,16 +44,18 @@ def load_abide_processed():
     labels = []
 
 
-
     idx = np.triu_indices(116,1)
     for i in range(num_sites):
+        if all_count_name[i,0][0] not in sites:
+            continue
+
         site_names.append(
             all_count_name[i,0][0]
         )
+
         labels.extend(
             label[i, 0][0]
         )
-
         fea_site = fea[i,0]
 
         if np.ndim(fea_site) == 3:
@@ -70,23 +73,20 @@ def load_abide_processed():
                 np.expand_dims(fea_site[idx], 0).T
             )
 
-
     labels = np.array(labels)
     return datas, labels, site_names
 
 
 
-
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
-    datas, labels, site_names = load_abide_processed()
+    mdict = loadmat('../data/rois_aal.mat')
+    fea = mdict['fea']
+    label = mdict['label']
+    all_count = mdict['All_Count']
+    all_count_name = mdict['All_Count_Name']
+    used_num = mdict['Used_Num']
 
-    X = SP.block_diag(datas)
-    print(X.shape)
+    for i in range(17):
+        print(all_count_name[i,0][0], fea[i,0].shape)
+
+
